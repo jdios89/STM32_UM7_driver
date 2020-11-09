@@ -529,7 +529,10 @@ static uint8_t USBD_CDC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 
   return (uint8_t)USBD_OK;
 }
-
+void USBD_CDC_SetTXfinishedSemaphore(SemaphoreHandle_t semaphore)
+{
+	USB_TX_FinishedSemaphore = semaphore;
+}
 /**
   * @brief  USBD_CDC_Init
   *         DeInitialize the CDC layer
