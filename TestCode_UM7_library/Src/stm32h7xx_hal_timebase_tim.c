@@ -22,14 +22,17 @@
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_tim.h"
 
+
 /* Private typedef -----------------------------------------------------------*/
+#include "stm32h7xx_hal_timebase_tim.h"
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef        htim16;
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
-
+static __IO uint32_t uwTickHighRes;
+static uint32_t frequency;
 /**
   * @brief  This function configures the TIM16 as a time base source.
   *         The time source is configured  to have 1ms time base with a dedicated
@@ -58,9 +61,16 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
 
   /* Compute TIM16 clock */
   uwTimclock = 2*HAL_RCC_GetPCLK2Freq();
+	/* Begin Thomas changed code */
+	uwTimclock = 2 * HAL_RCC_GetPCLK2Freq();
 
-  /* Compute the prescaler value to have TIM16 counter clock equal to 1MHz */
+	frequency = 10000; // 10 kHz
+	/* End Thomas changed code */
+	/* Compute the prescaler value to have TIM16 counter clock equal to 1MHz */
   uwPrescalerValue = (uint32_t) ((uwTimclock / 1000000) - 1);
+	/* Begin Thomas changed code */
+	uwPrescalerValue = (uint32_t) ((uwTimclock / frequency) - 1);
+	/* End Thomas changed code */
 
   /* Initialize TIM16 */
   htim16.Instance = TIM16;
@@ -96,6 +106,12 @@ void HAL_SuspendTick(void)
   /* Disable TIM16 update Interrupt */
   __HAL_TIM_DISABLE_IT(&htim16, TIM_IT_UPDATE);
 }
+/* Begin Thomas changed code */
+uint32_t HAL_GetTickTimerValue(void)
+{
+	return (uint32_t)__HAL_TIM_GET_COUNTER(&htim16);
+}
+/* End Thomas changed code */
 
 /**
   * @brief  Resume Tick increment.
@@ -108,5 +124,69 @@ void HAL_ResumeTick(void)
   /* Enable TIM16 Update interrupt */
   __HAL_TIM_ENABLE_IT(&htim16, TIM_IT_UPDATE);
 }
+void HAL_IncTick(void)
+{
+	uwTickHighRes += 10000; // timer update rate configured 1 Hz but with timer count frequency running at 10 kHz
+}
 
+uint32_t HAL_GetHighResTick(void)
+{
+	return (uwTickHighRes + HAL_GetTickTimerValue());
+}
+
+uint32_t HAL_tic()
+{
+	return HAL_GetHighResTick();
+}
+
+float HAL_toc(uint32_t timerPrev)
+{
+	uint32_t timerDelta;
+	uint32_t timerNow = HAL_GetHighResTick();
+	if (timerNow > timerPrev)
+		timerDelta = timerNow - timerPrev;
+	else
+		timerDelta = ((uint32_t)0xFFFFFFFF - timerPrev) + timerNow;
+
+	float microsTime = (float)timerDelta / frequency;
+	return microsTime;
+}
+void HAL_Delay(uint32_t Delay)
+{
+  uint32_t tickstart = HAL_GetTick();
+  uint32_t wait = Delay;
+
+  /*
+  // Add a freq to guarantee minimum wait
+  if (wait < HAL_MAX_DELAY)
+  {
+    wait += (uint32_t)(uwTickFreq);
+  }
+  */
+
+  while ((HAL_GetTick() - tickstart) < wait)
+  {
+  }
+}
+void HAL_DelayHighRes(uint32_t Delay)
+{
+  uint32_t tickstart = HAL_GetHighResTick();
+  uint32_t wait = Delay;
+
+  /*
+  // Add a freq to guarantee minimum wait
+  if (wait < HAL_MAX_DELAY)
+  {
+    wait += (uint32_t)(uwTickFreq);
+  }
+  */
+
+  while ((HAL_GetHighResTick() - tickstart) < wait)
+  {
+  }
+}
+uint32_t HAL_GetTick(void)
+{
+  return (uwTickHighRes / 10); // divide by 10 since we have configured HAL timer to run at 10 kHz in stm32h7xx_hal_timebase_tim.c
+}
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
