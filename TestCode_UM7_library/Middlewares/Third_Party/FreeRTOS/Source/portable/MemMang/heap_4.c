@@ -87,7 +87,7 @@ static void prvInsertBlockIntoFreeList( BlockLink_t *pxBlockToInsert );
  * pvPortMalloc() is called.
  */
 static void prvHeapInit( void );
-
+uint8_t freeRTOSMemoryScheme = 4;
 /*-----------------------------------------------------------*/
 
 /* The size of the structure placed at the beginning of each allocated memory

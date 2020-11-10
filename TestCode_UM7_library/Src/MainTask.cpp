@@ -91,6 +91,7 @@ void MainTask(void * pvParameters) {
 	Debug::print("Booting...\n");
 
 	/* Prepare Xsens IMU always, since it is used for logging and comparison purposes */
+	UART _uart(UART::PORT_UART3, 460800, 500);
 	UART * uart = new UART(UART::PORT_UART3, 460800, 500);
 	MTI200 * mti200 = new MTI200(uart);
 	if (params.estimator.ConfigureXsensIMUatBoot) {

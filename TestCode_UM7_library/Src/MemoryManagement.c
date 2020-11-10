@@ -75,9 +75,9 @@ void __wrap__free_r (void * ptr)
 
 void ZeroInitFreeRTOSheap(void)
 {
-//	uint8_t * heapPtr = (uint8_t*)&_sfreertos_heap; // heap is placed at this global symbol address
-//	freeRTOSMemoryScheme = configUSE_HEAP_SCHEME;
-//	memset(heapPtr, 0, configTOTAL_HEAP_SIZE);
+	uint8_t * heapPtr = (uint8_t*)&_sfreertos_heap; // heap is placed at this global symbol address
+	freeRTOSMemoryScheme = configUSE_HEAP_SCHEME;
+	memset(heapPtr, 0, configTOTAL_HEAP_SIZE);
 }
 
 #if 0

@@ -854,7 +854,7 @@ HAL_StatusTypeDef EEPROM::Format(void)
 	{
 	  return FlashStatus;
 	}
-	SCB_CleanInvalidateDCache_by_Addr((uint32_t*)PAGE0_BASE_ADDRESS,PAGE_SIZE);
+	////// SCB_CleanInvalidateDCache_by_Addr((uint32_t*)PAGE0_BASE_ADDRESS,PAGE_SIZE);
   }
   /* Set Page0 as valid page: Write VALID_PAGE at Page0 base address */
 

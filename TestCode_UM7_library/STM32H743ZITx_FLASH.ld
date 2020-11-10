@@ -167,6 +167,17 @@ SECTIONS
   } >DTCMRAM
 
   /* User_heap_stack section, used to check that there is enough RAM left */
+  .freertos_heap (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sfreertos_heap = .;        /* create a global symbol at data start */
+    *(.freertos_heap)           /* .freertos_heap sections */
+    *(.freertos_heap*)          /* .freertos_heap* sections */
+
+    . = ALIGN(4);
+    _efreertos_heap = .;        /* define a global symbol at data end */
+  } >RAM_D1
+  
   ._user_heap_stack :
   {
     . = ALIGN(8);
