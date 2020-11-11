@@ -89,12 +89,15 @@ void UART::ConfigurePeripheral()
 	_handle.Init.HwFlowCtl = UART_HWCONTROL_NONE;
 	_handle.Init.OverSampling = UART_OVERSAMPLING_16;
 	_handle.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-	/* TODO: Fix this parameter
+	_handle.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+
+	/* TODO: Fixed to new board
 	_handle.Init.Prescaler = UART_PRESCALER_DIV1;
 	_handle.Init.FIFOMode = UART_FIFOMODE_DISABLE;
 	_handle.Init.TXFIFOThreshold = UART_TXFIFO_THRESHOLD_1_8;
 	_handle.Init.RXFIFOThreshold = UART_RXFIFO_THRESHOLD_1_8;
 	*/
+
 	_handle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
 
 	if (HAL_UART_Init(&_handle) != HAL_OK)
@@ -102,7 +105,20 @@ void UART::ConfigurePeripheral()
 		ERROR("Could not initialize UART port");
 		return;
 	}
-
+	if (HAL_UARTEx_SetTxFifoThreshold(&_handle, UART_TXFIFO_THRESHOLD_1_8)
+			!= HAL_OK) {
+		ERROR("Could not Set TX Fifo Threshold");
+		return;
+	}
+	if (HAL_UARTEx_SetRxFifoThreshold(&_handle, UART_RXFIFO_THRESHOLD_1_8)
+			!= HAL_OK) {
+		ERROR("Could not Set RX Fifo Threshold");
+		return;
+	}
+	if (HAL_UARTEx_DisableFifoMode(&_handle) != HAL_OK) {
+		ERROR("Could not disable FIFO Mode");
+		return;
+	}
 	switch (_port) {
 		case PORT_UART3:
 			objUART3 = this;
@@ -133,7 +149,8 @@ void UART::ConfigurePeripheral()
 	}
 	vQueueAddToRegistry(_transmitByteFinished, "UART Finished");
 	xSemaphoreGive( _transmitByteFinished ); // give the semaphore the first time
-
+	xSemaphoreTake( _transmitByteFinished, ( TickType_t ) portMAX_DELAY ); // take it here to see what happens
+	xSemaphoreGive( _transmitByteFinished ); // give the semaphore the first time
 	_RXdataAvailable = xSemaphoreCreateBinary();
 	if (_RXdataAvailable == NULL) {
 		ERROR("Could not create UART RX available semaphore");
@@ -215,17 +232,18 @@ void UART::InitPeripheral()
 		/* Peripheral clock enable */
 		__HAL_RCC_USART3_CLK_ENABLE();
 
-		__HAL_RCC_GPIOB_CLK_ENABLE();
+
+		__HAL_RCC_GPIOD_CLK_ENABLE();
 		/**USART3 GPIO Configuration
-		PB10     ------> USART3_TX
-		PB11     ------> USART3_RX
+		PD8     ------> USART3_TX
+		PD9     ------> USART3_RX
 		*/
-		GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
+		GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
 		GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
 		GPIO_InitStruct.Pull = GPIO_NOPULL;
 		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 		GPIO_InitStruct.Alternate = GPIO_AF7_USART3;
-		HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+		HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
 		/* USART3 interrupt Init */
 		HAL_NVIC_SetPriority(USART3_IRQn, UART_INTERRUPT_PRIORITY, 0);
@@ -269,10 +287,10 @@ void UART::DeInitPeripheral()
 	__HAL_RCC_USART3_CLK_DISABLE();
 
 	/**USART3 GPIO Configuration
-	PB10     ------> USART3_TX
-	PB11     ------> USART3_RX
+	PD8     ------> USART3_TX
+	PD9     ------> USART3_RX
 	*/
-	HAL_GPIO_DeInit(GPIOB, GPIO_PIN_10|GPIO_PIN_11);
+	HAL_GPIO_DeInit(GPIOD, GPIO_PIN_8|GPIO_PIN_9);
 
 	/* USART3 interrupt DeInit */
 	HAL_NVIC_DisableIRQ(USART3_IRQn);
@@ -329,6 +347,7 @@ void UART::TransmitBlocking(uint8_t * buffer, uint32_t bufLen)
 	}
 
 	do {
+		/* This semaphore cannot be taken at the beginning for some reason */
 		xSemaphoreTake( _transmitByteFinished, ( TickType_t ) portMAX_DELAY ); // block until it has finished sending the byte
 		_handle.Instance->TDR = *buffer++;
 		/* Enable the TX FIFO threshold interrupt (if FIFO mode is enabled) or
@@ -534,14 +553,15 @@ void UART::UART_Interrupt(port_t port)
 	uint32_t errorflags;
 
 	/* If no error occurs */
-	errorflags = (isrflags & (uint32_t)(USART_ISR_PE | USART_ISR_FE | USART_ISR_ORE | USART_ISR_NE));
+	/* Updated for new board */
+	errorflags = (isrflags & (uint32_t)(USART_ISR_PE | USART_ISR_FE | USART_ISR_ORE | USART_ISR_NE | USART_ISR_RTOF));
 	if (errorflags == RESET)
 	{
 		/* UART in mode Receiver ---------------------------------------------------*/
 		/* TODO: Fix this parameter*/
-		if(/*((isrflags & USART_ISR_RXNE) != RESET)*/true
-			&& (   ((cr1its & USART_CR1_RXNEIE) != RESET)
-				|| ((cr3its & USART_CR3_RXFTIE) != RESET)) )
+		if (((isrflags & USART_ISR_RXNE_RXFNE) != 0U)
+		        && (((cr1its & USART_CR1_RXNEIE_RXFNEIE) != 0U)
+		            || ((cr3its & USART_CR3_RXFTIE) != 0U)))
 		{
 			//UART_Receive_IT(huart);
 			UART_IncomingDataInterrupt(uart);
@@ -550,9 +570,11 @@ void UART::UART_Interrupt(port_t port)
 	}
 
 	/* If some errors occur */
-	if(   (errorflags != RESET)
-		&& (   ((cr3its & (USART_CR3_RXFTIE | USART_CR3_EIE)) != RESET)
-			|| ((cr1its & (USART_CR1_RXNEIE | USART_CR1_PEIE)) != RESET)))
+	if ((errorflags != RESET)
+			&& ((((cr3its & (USART_CR3_RXFTIE | USART_CR3_EIE)) != RESET)
+					|| ((cr1its
+							& (USART_CR1_RXNEIE_RXFNEIE | USART_CR1_PEIE | USART_CR1_RTOIE))
+							!= RESET))))
 	{
 		/* UART parity error interrupt occurred -------------------------------------*/
 		if(((isrflags & USART_ISR_PE) != RESET) && ((cr1its & USART_CR1_PEIE) != RESET))
@@ -594,9 +616,9 @@ void UART::UART_Interrupt(port_t port)
 		{
 			/* UART in mode Receiver ---------------------------------------------------*/
 			/* TODO: Fix this parameter */
-			if(/*((isrflags & USART_ISR_RXNE) != RESET)*/true
-			&& (   ((cr1its & USART_CR1_RXNEIE) != RESET)
-			|| ((cr3its & USART_CR3_RXFTIE) != RESET)) )
+			if (((isrflags & USART_ISR_RXNE_RXFNE) != RESET)
+			          && (((cr1its & USART_CR1_RXNEIE_RXFNEIE) != RESET)
+			              || ((cr3its & USART_CR3_RXFTIE) != RESET)))
 			{
 				//UART_Receive_IT(huart);
 				UART_IncomingDataInterrupt(uart);
@@ -668,9 +690,9 @@ void UART::UART_Interrupt(port_t port)
 
 	/* UART in mode Transmitter ------------------------------------------------*/
 	/* TODO: Fix this parameter */
-	if(true/*((isrflags & USART_ISR_TXE) != RESET)*/
-	&& (   ((cr1its & USART_CR1_TXEIE) != RESET)
-	|| ((cr3its & USART_CR3_TXFTIE) != RESET)) )
+	if (((isrflags & USART_ISR_TXE_TXFNF) != 0U)
+			&& (((cr1its & USART_CR1_TXEIE_TXFNFIE) != 0U)
+					|| ((cr3its & USART_CR3_TXFTIE) != 0U)))
 	{
 		//UART_Transmit_IT(huart);
 		/* Disable the TX FIFO threshold interrupt (if FIFO mode is enabled) or
