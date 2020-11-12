@@ -100,7 +100,20 @@ size_t XbusMessage_format(uint8_t* raw, struct XbusMessage const* message, enum 
 				*dptr++ = XBUS_MASTERDEVICE;
 			}
 			break;
+		case XLLF_UM7:
+		  {
+			  *dptr++ = 's'; /* Complete header of the message */
+			  *dptr++ = 'n';
+			  *dptr++ = 'p';
+			  *dptr++ = 0x00; /* Packet type byte */
+			  *dptr++ = 0xAA;
+			  *dptr++ = 0x01;
+			  *dptr++ = 0xFB;
+		  }
+		  return 7;
+		  break;
 	}
+
 
 	uint8_t checksum = (uint8_t)(-XBUS_MASTERDEVICE);
 
@@ -133,6 +146,7 @@ size_t XbusMessage_format(uint8_t* raw, struct XbusMessage const* message, enum 
 
 	return dptr - raw;
 }
+
 
 /*!
  * \brief Get a pointer to the data corresponding to \a id.

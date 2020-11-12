@@ -36,6 +36,20 @@ enum XbusParserState
 	XBPS_Checksum           /*!< \brief Waiting for checksum. */
 };
 
+/*! \brief UM7 states. */
+enum XbusParserStateUM7
+{
+	STATE_ZERO,
+	STATE_S,
+	STATE_SN,
+	STATE_SNP,
+	STATE_PT,
+	STATE_DATA,
+	STATE_CHK1,
+	STATE_CHK0
+};
+
+
 /*!
  * \brief Xbus Parser state structure.
  */
@@ -51,6 +65,15 @@ struct XbusParser
 	uint8_t checksum;
 	/*! \brief The state of the parser. */
 	enum XbusParserState state;
+	/* Extra info for UM7 */
+	uint8_t packet_type;
+	bool packet_is_batch;
+	bool packet_has_data;
+	uint8_t batch_length;
+	uint8_t checksum1;		// First byte of checksum
+	uint8_t checksum0;
+	unsigned short checksum10;
+	unsigned short computed_checksum;
 };
 
 /*!
@@ -203,6 +226,106 @@ void prepareForPayload(struct XbusParser* parser)
  */
 void XbusParser_parseByte(struct XbusParser* parser, const uint8_t byte)
 {
+	/* Parsing an UM7 message */
+	switch (parser->state)
+	{
+	  case STATE_ZERO:
+	  	if (byte == 's')
+	  	{
+	  		parser->computed_checksum = byte;
+	  		parser->state = STATE_S;
+	  	}
+	  	else
+	  	{
+        parser->computed_checksum = 0;
+        parser->state = STATE_ZERO;
+	  	}
+	  	break;
+	  case STATE_S:
+	  	if (byte == 'n')
+	  	{
+	  		parser->computed_checksum += byte;
+	  		parser->state = STATE_SN;
+	  	}
+	  	else
+	  	{
+	  		parser->computed_checksum = 0;
+	  		parser->state = STATE_ZERO;
+	  	}
+	  	break;
+	  case STATE_SN:
+	  	if (byte == 'p')
+	  	{
+	  		parser->computed_checksum += byte;
+	  		parser->state = STATE_SNP;
+	  	}
+	  	else
+	  	{
+	  		parser->computed_checksum = 0;
+	  		parser->state = STATE_ZERO;
+	  	}
+	  	break;
+	  case STATE_SNP:
+	  	parser->computed_checksum += byte;
+	  	parser->state = STATE_PT;
+      parser->packet_type = byte;
+      parser->packet_has_data = (parser->packet_type >> 7) & 0x01;
+      parser->packet_is_batch = (parser->packet_type >> 6) & 0x01;
+      parser->batch_length    = (parser->packet_type >> 2) & 0x0F;
+		  if (parser->packet_has_data) {
+			  if (parser->packet_is_batch) {
+			  	parser->currentMessage.length = 4 * parser->batch_length;	// Each data packet is 4 bytes long
+			  } else {
+			  	parser->currentMessage.length = 4;
+			  }
+		  } else {
+			  parser->currentMessage.length = 0;
+			  parser->currentMessage.data = NULL;
+		  }
+		  break;
+	  case STATE_PT:
+	  	parser->computed_checksum += byte;
+	  	/* Added UM7 registers on XsMessageId */
+	  	parser->currentMessage.mid = (enum XsMessageId)byte;
+		  if (parser->currentMessage.length == 0) {
+			  parser->state = STATE_CHK1;
+		  } else {
+			  prepareForPayload(parser);
+			  parser->state = STATE_DATA;
+		  }
+		  break;
+	  case STATE_DATA:
+	  	parser->computed_checksum += byte;
+	  	if (parser->currentMessage.data)
+	  	{
+	  	  ((uint8_t*)parser->currentMessage.data)[parser->payloadReceived] = byte;
+	  	}
+	  	if (++parser->payloadReceived == parser->currentMessage.length)
+	  	{
+	  	  parser->state = STATE_CHK1;
+	  	}
+	  	break;
+	  case STATE_CHK1:
+	  	parser->state = STATE_CHK0;
+	  	parser->checksum1 = byte;
+	  	break;
+	  case STATE_CHK0:
+	  	parser->checksum0 = byte;
+	  	parser->checksum10  = parser->checksum1 << 8;	// Combine checksum1 and checksum0
+	  	parser->checksum10 |= parser->checksum0;
+	  	if (parser->checksum10 == parser->computed_checksum)
+	  	{
+	  	  parseMessagePayload(parser);
+	  		parser->callbacks.handleMessage(parser->callbacks.parameter, &parser->currentMessage);
+	    }
+	  	else if (parser->currentMessage.data)
+	  	{
+	  		parser->callbacks.deallocateBuffer(parser->currentMessage.data);
+	  	}
+	  	parser->state = STATE_ZERO;
+	  	break;
+	}
+#if 0 // Original message parser
 	switch (parser->state)
 	{
 		case XBPS_Preamble:
@@ -285,6 +408,7 @@ void XbusParser_parseByte(struct XbusParser* parser, const uint8_t byte)
 			parser->state = XBPS_Preamble;
 			break;
 	}
+#endif
 }
 
 /*!

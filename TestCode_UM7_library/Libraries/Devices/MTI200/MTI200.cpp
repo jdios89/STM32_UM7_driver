@@ -136,6 +136,36 @@ bool MTI200::Configure(uint32_t SampleRate)
 	return true;
 }
 
+bool MTI200::ConfigureUM7(uint32_t SampleRate)
+{
+	/* Test a send command to UM7 */
+	int tries = 3; // try 3 times to go into config - if no response, we might already be in config
+	while (tries-- > 0) if (sendCommandUM7(XMID_GotoConfig)) break;
+
+	if (tries <= 0) { // if we did not get any config response, check if it was because we were already in config mode
+		tries = 3;
+		while (tries-- > 0) if (sendCommand(XMID_ReqDid)) break;
+	} else {
+		tries = 3;
+	}
+
+	/*while (tries-- > 0) if (sendCommand(XMID_Reset)) break;
+	if (waitForWakeup(10000))
+	{
+		sendWakeupAck();
+	}
+	while (tries-- > 0) if (sendCommand(XMID_GotoConfig)) break;*/
+
+	while (tries-- > 0) if (configureMotionTracker(SampleRate)) break;
+	while (tries-- > 0) if (sendCommand(XMID_GotoMeasurement)) break;
+
+	if (tries <= 0) {
+		Debug::print("Failed configuring MTI200 IMU\n");
+		return false;
+	}
+	return true;
+}
+
 uint32_t MTI200::WaitForNewData(uint32_t xTicksToWait) // blocking call
 {
 	if (!_interruptSemaphore)
@@ -244,6 +274,14 @@ void MTI200::sendMessage(XbusMessage const* m)
 		_uart->Write(buf, rawLength);
 	}
 }
+void MTI200::sendMessageUM7(XbusMessage const* m)
+{ /* Added format for UM7 */
+	uint8_t buf[64];
+	size_t rawLength = XbusMessage_format(buf, m, XLLF_UM7);
+	if (_uart) {
+		_uart->Write(buf, rawLength);
+	}
+}
 
 /*!
  * \brief Send a message to the MT and wait for a response.
@@ -258,6 +296,20 @@ XbusMessage const * MTI200::doTransaction(XbusMessage const* m)
 	xSemaphoreTake( _resourceSemaphore, ( TickType_t ) portMAX_DELAY ); // take hardware resource
 
 	sendMessage(m);
+
+	// Wait for the transmission to finish
+	XbusMessage * msgPtr = NULL;
+	xQueueReceive( _responseQueue, &msgPtr, ( TickType_t ) 500 ); // wait for response
+
+	xSemaphoreGive( _resourceSemaphore ); // give hardware resource back
+
+	return msgPtr;
+}
+XbusMessage const * MTI200::doTransactionUM7(XbusMessage const* m)
+{
+	xSemaphoreTake( _resourceSemaphore, ( TickType_t ) portMAX_DELAY ); // take hardware resource
+
+	sendMessageUM7(m);
 
 	// Wait for the transmission to finish
 	XbusMessage * msgPtr = NULL;
@@ -349,6 +401,25 @@ bool MTI200::sendCommand(XsMessageId cmdId)
 	}
 }
 
+bool MTI200::sendCommandUM7(XsMessageId cmdId)
+{
+	/* TODO: Change address here */
+	XbusMessage m = {cmdId};
+	XbusMessage const * response = doTransaction(&m);
+	XbusMessageMemoryManager janitor(response);
+
+	if (response)
+	{
+		dumpResponse(response);
+		return true;
+	}
+	else
+	{
+		Debug::print("Timeout waiting for response.\r\n");
+		return false;
+	}
+}
+
 /*!
  * \brief Read the device ID of the motion tracker.
  */
@@ -356,6 +427,24 @@ uint32_t MTI200::readDeviceId(void)
 {
 	XbusMessage reqDid = {XMID_ReqDid};
 	XbusMessage const * didRsp = doTransaction(&reqDid);
+	XbusMessageMemoryManager janitor(didRsp);
+	uint32_t deviceId = 0;
+	if (didRsp)
+	{
+		if (didRsp->mid == XMID_DeviceId)
+		{
+			deviceId = *(uint32_t*)didRsp->data;
+		}
+	}
+	return deviceId;
+}
+
+uint32_t MTI200::getFirmwareRevisionUM7(void)
+{
+	uint8_t elements = 4;
+
+	XbusMessage getFw = {GET_FW_REVISION};
+	XbusMessage const * didRsp = doTransactionUM7(&getFw);
 	XbusMessageMemoryManager janitor(didRsp);
 	uint32_t deviceId = 0;
 	if (didRsp)

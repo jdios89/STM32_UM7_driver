@@ -94,6 +94,7 @@ void MainTask(void * pvParameters) {
 	/* UART _uart(UART::PORT_UART3, 460800, 500); */
 	UART * uart = new UART(UART::PORT_UART3, 115200, 500);
 	MTI200 * mti200 = new MTI200(uart);
+  while(1) {	mti200->getFirmwareRevisionUM7(); osDelay(1) ; }
 	if (params.estimator.ConfigureXsensIMUatBoot) {
 		if (!mti200->Configure(2 * params.estimator.SampleRate)) { // configuration failed, so do not use/pass on to balance controller
 			delete (mti200);

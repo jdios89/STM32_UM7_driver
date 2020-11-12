@@ -626,8 +626,12 @@ void UART::UART_Interrupt(port_t port)
 
 			/* If Overrun error occurs, or if any error occurs in DMA mode reception,
 			consider error as blocking */
+			/*
 			if (((uart->_handle.ErrorCode & HAL_UART_ERROR_ORE) != RESET) ||
 			(HAL_IS_BIT_SET(uart->_handle.Instance->CR3, USART_CR3_DMAR)))
+			*/
+			if ((HAL_IS_BIT_SET(uart->_handle.Instance->CR3, USART_CR3_DMAR)) ||
+			          ((uart->_handle.ErrorCode & (HAL_UART_ERROR_RTO | HAL_UART_ERROR_ORE)) != 0U))
 			{
 				/* Blocking error : transfer is aborted
 				Set the UART state ready to be able to start again the process,

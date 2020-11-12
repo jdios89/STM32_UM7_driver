@@ -132,18 +132,18 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ETH_Init();
-   MX_USART3_UART_Init();
+//   MX_USART3_UART_Init();
   MX_UART4_Init();
   MX_UART7_Init();
   /* USER CODE BEGIN 2 */
-
+/*
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", 1, 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
-
+*/
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */

@@ -57,6 +57,7 @@ class MTI200 : public IMU
 		void GetEstimates(Estimates_t& estimates);
 
 		bool Configure(uint32_t SampleRate);
+		bool ConfigureUM7(uint32_t SampleRate);
 		LastMeasurement_t GetLastMeasurement();
 
 	private:
@@ -76,11 +77,17 @@ class MTI200 : public IMU
 		static void mtMessageHandler(void * param, struct XbusMessage const* message);
 	
 		void sendMessage(XbusMessage const* m);
+		void sendMessageUM7(XbusMessage const* m);
 		XbusMessage const * doTransaction(XbusMessage const* m);
+		XbusMessage const * doTransactionUM7(XbusMessage const* m);
 		void dumpResponse(XbusMessage const* response);
 
 		bool sendCommand(XsMessageId cmdId);
+		bool sendCommandUM7(XsMessageId cmdId);
 		uint32_t readDeviceId(void);
+	public: /*for testing make public */
+		uint32_t getFirmwareRevisionUM7(void);
+	private:
 		bool setOutputConfiguration(OutputConfiguration const* conf, uint8_t elements);
 		bool configureMotionTracker(uint32_t SampleRate);
 
