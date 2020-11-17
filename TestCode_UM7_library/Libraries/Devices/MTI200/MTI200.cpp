@@ -140,29 +140,11 @@ bool MTI200::ConfigureUM7(uint32_t SampleRate)
 {
 	/* Test a send command to UM7 */
 	int tries = 3; // try 3 times to go into config - if no response, we might already be in config
-	while (tries-- > 0) if (getFirmwareRevisionUM7()) break;
-	configureMotionTrackerUM7(SampleRate);
-	/*
-	if (tries <= 0) { // if we did not get any config response, check if it was because we were already in config mode
-		tries = 3;
-		while (tries-- > 0) if (sendCommand(XMID_ReqDid)) break;
-	} else {
-		tries = 3;
-	}
-  */
-
-	/*while (tries-- > 0) if (sendCommand(XMID_Reset)) break;
-	if (waitForWakeup(10000))
-	{
-		sendWakeupAck();
-	}
-	while (tries-- > 0) if (sendCommand(XMID_GotoConfig)) break;*/
-
+	// while (tries-- > 0) if (getFirmwareRevisionUM7()) break;
 	while (tries-- > 0) if (configureMotionTrackerUM7(SampleRate)) break;
-	while (tries-- > 0) if (sendCommand(XMID_GotoMeasurement)) break;
 
 	if (tries <= 0) {
-		Debug::print("Failed configuring MTI200 IMU\n");
+		Debug::print("Failed configuring UM7 IMU\n");
 		return false;
 	}
 	return true;
@@ -225,6 +207,15 @@ void MTI200::mtMessageHandler(void * param, struct XbusMessage const* message)
 	MTI200 * mti200 = (MTI200 *)param;
 	if (!mti200) return;
 	if (message->mid >= DREG_HEALTH && message->mid <= DREG_GYRO_BIAS_Z ) { // Message queue disabled - parse data immediately
+		switch (message->mid) {
+		case 1: /* Parse first address */
+			break;
+		case 2: /* Parse second address */
+			break;
+		case 3: /* Parse third address */
+			break;
+		}
+		mti200->parseMTData2Message(message);
 		mti200->parseMTData2Message(message); // Parse Data objects
 		deallocateMessageData(message->data);
 	} else { // other type of message, put into response queue
@@ -489,7 +480,7 @@ uint32_t MTI200::getFirmwareRevisionUM7(void)
 	return deviceId;
 }
 
-bool MTI200::setOutputRate(uint8_t rate)
+bool MTI200::setOutputRateUM7(uint8_t rate)
 {
   uint8_t elements = 4;
 	uint8_t read_write = 1;
@@ -500,37 +491,45 @@ bool MTI200::setOutputRate(uint8_t rate)
 			read_write, is_batch, batch_length };
 	XbusMessage const* outputConfRsp = doTransactionUM7(&outputConfMsg);
 	XbusMessageMemoryManager janitor(outputConfRsp);
+
+	bool first_reply = false;
+
 	if (outputConfRsp) {
-		if (outputConfRsp->mid == XMID_OutputConfig) {
+		if (outputConfRsp->mid == CREG_COM_RATES4) {
 			Debug::print("Output configuration set to:\r\n");
+			/*
 			OutputConfiguration* conf = (OutputConfiguration*) outputConfRsp->data;
 			for (int i = 0; i < outputConfRsp->length; ++i) {
 				Debug::printf("\t%s: %d Hz\r\n",
 						XbusMessage_dataDescription(conf->dtype), conf->freq);
 				++conf;
 			}
-			return true;
+			*/
+			first_reply = true;
 		} else {
 			dumpResponse(outputConfRsp);
 		}
 	} else {
 		Debug::print("Failed to set output configuration.\r\n");
 	}
+	osDelay(10);
 	conf[0] = rate;
 	XbusMessage outputConfMsg2 = { CREG_COM_RATES5, elements, (void*) conf,
 				read_write, is_batch, batch_length };
 	XbusMessage const* outputConfRsp2 = doTransactionUM7(&outputConfMsg2);
 	XbusMessageMemoryManager janitor2(outputConfRsp2);
 	if (outputConfRsp2) {
-		if (outputConfRsp2->mid == XMID_OutputConfig) {
+		if (outputConfRsp2->mid == CREG_COM_RATES5) {
 			Debug::print("Output configuration set to:\r\n");
+			/*
 			OutputConfiguration* conf2 = (OutputConfiguration*) outputConfRsp2->data;
 			for (int i = 0; i < outputConfRsp2->length; ++i) {
 				Debug::printf("\t%s: %d Hz\r\n",
 						XbusMessage_dataDescription(conf2->dtype), conf2->freq);
 				++conf2;
 			}
-			return true;
+			*/
+			return first_reply & true;
 		} else {
 			dumpResponse(outputConfRsp2);
 		}
@@ -626,27 +625,14 @@ bool MTI200::configureMotionTracker(uint32_t SampleRate)
 }
 bool MTI200::configureMotionTrackerUM7(uint8_t SampleRate)
 {
-	uint32_t firmwarerevision = getFirmwareRevisionUM7();
+	// uint32_t firmwarerevision = getFirmwareRevisionUM7();
 
-		if ((968 * SampleRate) > _uart->BaudRate) Debug::print("Note: UM7 sample rate might be too high to ensure consistent sampling without data loss\n");
-		uint8_t conf = SampleRate;
+	if ((968 * SampleRate) > _uart->BaudRate)
+		Debug::print(
+				"Note: UM7 sample rate might be too high to ensure consistent sampling without data loss\n");
+	uint8_t conf = SampleRate;
 
-		setOutputRate(conf);
-
-		OutputConfiguration conf1[] = {
-			{XDI_PacketCounter, 65535}, // 65535 == fastest rate possible
-			{XDI_SampleTimeFine, 65535},
-			{XDI_Quaternion, SampleRate},
-			//{XDI_DeltaQ, SampleRate}, // no need to include the DeltaQ, since this is just generated from the RateOfTurn and corresponds to the movement over a period of 1/(400 Hz)
-			{XDI_Acceleration, SampleRate},
-			{XDI_RateOfTurn, SampleRate},
-			{XDI_MagneticField, std::min<uint32_t>(SampleRate, 100)},
-			{XDI_StatusWord, 65535}
-		};
-
-		return setOutputConfiguration(conf1,
-				sizeof(conf) / sizeof(OutputConfiguration));
-
+	return setOutputRateUM7(conf);
 
 	return false;
 }

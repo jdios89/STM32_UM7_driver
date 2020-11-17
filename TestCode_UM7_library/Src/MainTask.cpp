@@ -97,7 +97,9 @@ void MainTask(void * pvParameters) {
 	MTI200 * mti200 = new MTI200(uart);
 	bool next = false;
   while(!next) {	next = mti200->resetEKFUM7();/*   mti200->ConfigureUM7(255);*/ osDelay(1) ; }
-	while(1) {mti200->getFirmwareRevisionUM7();}
+  next = false;
+	while(!next) {next = mti200->ConfigureUM7(255); osDelay(1) ; }
+  while(1) {mti200->getFirmwareRevisionUM7();} // just testing
   if (params.estimator.ConfigureXsensIMUatBoot) {
 		if (!mti200->Configure(2 * params.estimator.SampleRate)) { // configuration failed, so do not use/pass on to balance controller
 			delete (mti200);
