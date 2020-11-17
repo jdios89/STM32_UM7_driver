@@ -89,7 +89,9 @@ class MTI200 : public IMU
 		uint32_t getFirmwareRevisionUM7(void);
 	private:
 		bool setOutputConfiguration(OutputConfiguration const* conf, uint8_t elements);
+		bool setOutputRate(uint8_t rate);
 		bool configureMotionTracker(uint32_t SampleRate);
+		bool configureMotionTrackerUM7(uint8_t SampleRate);
 
 		bool waitForWakeup(uint32_t timeout);
 		void sendWakeupAck(void);

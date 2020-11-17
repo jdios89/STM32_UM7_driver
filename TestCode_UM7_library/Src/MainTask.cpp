@@ -74,6 +74,7 @@ void MainTask(void * pvParameters) {
 			sizeof(IMU::calibration_t)); // enable IMU calibration section in EEPROM
 	eeprom->EnableSection(eeprom->sections.parameters,
 			params.getParameterSizeBytes());
+  /* Commented because it goes to hard fault handler */
 	eeprom->Initialize();
 	params.AttachEEPROM(eeprom); // attach EEPROM to load and store parameters into EEPROM
 
@@ -92,9 +93,11 @@ void MainTask(void * pvParameters) {
 
 	/* Prepare Xsens IMU always, since it is used for logging and comparison purposes */
 	/* UART _uart(UART::PORT_UART3, 460800, 500); */
-	UART * uart = new UART(UART::PORT_UART3, 115200, 500);
+	UART * uart = new UART(UART::PORT_UART3, 460800, 500);
 	MTI200 * mti200 = new MTI200(uart);
-  while(1) {	mti200->getFirmwareRevisionUM7(); osDelay(1) ; }
+  while(1) {	mti200->getFirmwareRevisionUM7();
+              mti200->ConfigureUM7(255);
+              osDelay(1) ; }
 	if (params.estimator.ConfigureXsensIMUatBoot) {
 		if (!mti200->Configure(2 * params.estimator.SampleRate)) { // configuration failed, so do not use/pass on to balance controller
 			delete (mti200);

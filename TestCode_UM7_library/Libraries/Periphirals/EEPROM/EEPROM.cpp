@@ -141,6 +141,8 @@ bool EEPROM::IsSectionInUse(uint16_t address)
 void EEPROM::Initialize(void)
 {
 	HAL_FLASH_Unlock();
+	/* Added format for testing */
+	Format();
 	Init();
 
 	if (CheckForAssignedStructureChange()) {
@@ -458,6 +460,8 @@ uint16_t EEPROM::Init(void)
   PageStatus0 = (*(__IO uint16_t*)PAGE0_BASE_ADDRESS);
   /* Get Page1 status */
   PageStatus1 = (*(__IO uint16_t*)PAGE1_BASE_ADDRESS);
+  /* TODO: Remove this hard coded Page 1 base address */
+//  PageStatus1 = 0xFFFF;
 
   pEraseInit.TypeErase = TYPEERASE_SECTORS;
   pEraseInit.Banks = FLASH_BANK_2 ;
@@ -990,7 +994,7 @@ EEPROM::errorCode_t EEPROM::VerifyPageFullWriteVariable(uint16_t VirtAddress, ui
   while (Address < PageEndAddress)
   {
 	/* Verify if Address and Address+2 contents are 0xFFFFFFFF */
-	if ((*(__IO uint32_t*)Address) == 0xFFFFFFFF)
+  if ((*(__IO uint32_t*)Address) == 0xFFFFFFFF)
 	{
 	  /* Set variable data */
 	  FlashStatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD, Address, (uint64_t)((uint32_t)data64));

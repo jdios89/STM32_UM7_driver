@@ -132,18 +132,18 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ETH_Init();
-//   MX_USART3_UART_Init();
+   MX_USART3_UART_Init();
   MX_UART4_Init();
   MX_UART7_Init();
   /* USER CODE BEGIN 2 */
-/*
+
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", 1, 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
   HAL_UART_Transmit(&huart3, (uint8_t*)"Z", sizeof("Z"), 50);
-*/
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -357,7 +357,7 @@ static void MX_UART4_Init(void)
 
   /* USER CODE END UART4_Init 1 */
   huart4.Instance = UART4;
-  huart4.Init.BaudRate = 115200;
+  huart4.Init.BaudRate = 460800; //15200
   huart4.Init.WordLength = UART_WORDLENGTH_8B;
   huart4.Init.StopBits = UART_STOPBITS_1;
   huart4.Init.Parity = UART_PARITY_NONE;
@@ -453,7 +453,7 @@ static void MX_USART3_UART_Init(void)
 
   /* USER CODE END USART3_Init 1 */
   huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
+  huart3.Init.BaudRate = 460800;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;

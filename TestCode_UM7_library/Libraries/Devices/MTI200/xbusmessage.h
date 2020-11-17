@@ -169,6 +169,7 @@ enum XbusLowLevelFormat
 	XLLF_Spi,
 	/*! \brief Format for use with UART interface. */
 	XLLF_Uart,
+	/*! \brief Format for use with UART interface on UM7 . */
 	XLLF_UM7
 };
 
@@ -189,6 +190,13 @@ struct XbusMessage
 	uint16_t length;
 	/*! \brief Pointer to the payload data. */
 	void* data;
+
+	/*!
+	 * \brief The writing or reading of the operation, also if it is batch and batch length
+	 */
+	uint8_t read_write;
+	uint8_t is_batch;
+	uint8_t batch_length;
 
 
 };

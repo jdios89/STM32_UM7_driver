@@ -102,21 +102,59 @@ size_t XbusMessage_format(uint8_t* raw, struct XbusMessage const* message, enum 
 			break;
 		case XLLF_UM7:
 		  {
+		  	uint16_t checksum = 's' + 'n' + 'p';
 			  *dptr++ = 's'; /* Complete header of the message */
 			  *dptr++ = 'n';
 			  *dptr++ = 'p';
-			  *dptr++ = 0x00; /* Packet type byte */
-			  *dptr++ = 0xAA;
-			  *dptr++ = 0x01;
-			  *dptr++ = 0xFB;
+			  uint8_t address_type = message->mid;
+			  if (address_type < 0xAA) {
+			  	uint8_t packet_type = 0x0;
+			  	if(message->read_write)
+			  		packet_type = (0x01 << 7);
+			  	if(message->is_batch)
+			  		packet_type = packet_type | (0x01 << 6);
+
+			  	packet_type = packet_type | (message->batch_length << 2);
+			  	*dptr++ = packet_type;
+			  	checksum += packet_type;
+			  }
+			  else if (address_type >= 0xAA) {
+            *dptr++ = 0x0;
+            checksum += 0x0;
+			  }
+			  /* Write the address */
+			  *dptr++ = (uint8_t) message->mid;
+			  checksum += (uint8_t) message->mid;
+			  uint8_t datalength = 0;
+			  if (message->read_write) { // if packet has data
+			  	if(message->is_batch) {
+			  		datalength = 4*message->batch_length;
+			  	}
+			  	else {
+			  		datalength = 4;
+			  	}
+			  }
+			  for (int i = 0; i < datalength; ++i)
+			  {
+			    *dptr++ = ((uint8_t*) message->data)[i];
+			    /* Complete checksum */
+			    checksum += ((uint8_t*)message->data)[i];
+			  }
+			  // formatPayload(dptr, message);
+
+			  uint8_t checksum1 = (uint8_t) ((checksum >> 8) & 0xFF);
+			  uint8_t checksum0 = (uint8_t) (checksum & 0xFF);
+			  *dptr++ = checksum1;
+			  *dptr++ = checksum0;
+			  return dptr - raw;
 		  }
-		  return 7;
+		  /* return 7; */
 		  break;
 	}
 
 
 	uint8_t checksum = (uint8_t)(-XBUS_MASTERDEVICE);
-
+  /*//// No change for UM7, add address */
 	*dptr = message->mid;
 	checksum -= *dptr++;
 
