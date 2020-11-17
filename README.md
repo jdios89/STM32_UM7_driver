@@ -1,6 +1,12 @@
 # This is the source for UM7 driver for STM32
 
 The communication to the UM7 IMU is through Serial RS-232 UART. The uart libraries used are on this git hub [Kugle embedded](https://github.com/mindThomas/Kugle-Embedded)
+
+## Development board 
+
+The board used for developing this library is [Nucleo STM32H743ZI2](https://www.st.com/en/evaluation-tools/nucleo-h743zi.html#sample-buy) <br/>
+![Screenshot](nucleo.jpg)
+
 ## Installation 
 
 STMCubeMX IDE is used to specify the clock source for the periphirial in the input-output map. 

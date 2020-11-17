@@ -224,7 +224,23 @@ void MTI200::mtMessageHandler(void * param, struct XbusMessage const* message)
 { /* TODO: Add message parser */
 	MTI200 * mti200 = (MTI200 *)param;
 	if (!mti200) return;
+	if (message->mid >= DREG_HEALTH && message->mid <= DREG_GYRO_BIAS_Z ) { // Message queue disabled - parse data immediately
+		mti200->parseMTData2Message(message); // Parse Data objects
+		deallocateMessageData(message->data);
+	} else { // other type of message, put into response queue
+		XbusMessage * msgPtr = (XbusMessage *) pvPortMalloc(sizeof(XbusMessage));
+		if (msgPtr) {
+			memcpy(msgPtr, message, sizeof(XbusMessage));
+			if (xQueueSend(mti200->_responseQueue, (void * )&msgPtr,
+					(TickType_t ) 0) != pdPASS) {
+				deallocateMessageData(message->data); // failed putting message into queue - deallocate message data memory
+			}
+		} else {
+			deallocateMessageData(message->data); // could not allocate memory for received Xbus message
+		}
+	}
 
+#if 0 // USE MESSAGE MTI HANDLER
 	if (message->mid == XMID_MtData2) { // Message queue disabled - parse data immediately
 		mti200->parseMTData2Message(message);
 		deallocateMessageData(message->data);
@@ -239,6 +255,7 @@ void MTI200::mtMessageHandler(void * param, struct XbusMessage const* message)
 			deallocateMessageData(message->data); // could not allocate memory for received Xbus message
 		}
 	}
+#endif
 
 #if 0 // USE MESSAGE QUEUE BUFFER
 	XbusMessage * msgPtr = (XbusMessage *)pvPortMalloc(sizeof(XbusMessage));
@@ -441,6 +458,21 @@ uint32_t MTI200::readDeviceId(void)
 	return deviceId;
 }
 
+bool MTI200::resetEKFUM7(void)
+{
+	XbusMessage getFw = {RESET_EKF};
+	XbusMessage const * didRsp = doTransactionUM7(&getFw);
+	XbusMessageMemoryManager janitor(didRsp);
+	bool reply = false;
+	if (didRsp)
+	{
+		if (didRsp->mid == RESET_EKF)
+		{
+			reply = true;
+		}
+	}
+	return reply;
+}
 uint32_t MTI200::getFirmwareRevisionUM7(void)
 {
 	XbusMessage getFw = {GET_FW_REVISION};
@@ -449,7 +481,7 @@ uint32_t MTI200::getFirmwareRevisionUM7(void)
 	uint32_t deviceId = 0;
 	if (didRsp)
 	{
-		if (didRsp->mid == XMID_DeviceId)
+		if (didRsp->mid == GET_FW_REVISION)
 		{
 			deviceId = *(uint32_t*)didRsp->data;
 		}

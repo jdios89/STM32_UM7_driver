@@ -87,6 +87,7 @@ class MTI200 : public IMU
 		uint32_t readDeviceId(void);
 	public: /*for testing make public */
 		uint32_t getFirmwareRevisionUM7(void);
+		bool resetEKFUM7(void);
 	private:
 		bool setOutputConfiguration(OutputConfiguration const* conf, uint8_t elements);
 		bool setOutputRate(uint8_t rate);

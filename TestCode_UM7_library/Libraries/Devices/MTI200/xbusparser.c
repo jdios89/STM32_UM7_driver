@@ -149,6 +149,21 @@ static void parseDeviceId(struct XbusParser* parser, uint8_t const* rawData)
 	}
 }
 
+static void parseDefault(struct XbusParser* parser, uint8_t const* rawData)
+{
+	uint32_t* deviceId = parser->callbacks.allocateBuffer(sizeof(uint32_t));
+	if (deviceId)
+	{
+		XbusUtility_readU32(deviceId, rawData);
+		parser->currentMessage.data = deviceId;
+		parser->currentMessage.length = 1;
+	}
+	else
+	{
+		parser->currentMessage.data = NULL;
+	}
+}
+
 /*!
  * \brief Parse an XMID_OutputConfig message.
  *
@@ -190,6 +205,8 @@ static void parseMessagePayload(struct XbusParser* parser)
 	switch (parser->currentMessage.mid)
 	{
 		default:
+			;
+			parseDefault(parser, rawData);
 			// Leave parsing and memory management to user code
 			return;
 
@@ -315,7 +332,7 @@ void XbusParser_parseByte(struct XbusParser* parser, const uint8_t byte)
 	  	parser->checksum10 |= parser->checksum0;
 	  	if (parser->checksum10 == parser->computed_checksum)
 	  	{
-	  	  parseMessagePayload(parser);
+	  	  // parseMessagePayload(parser);
 	  		parser->callbacks.handleMessage(parser->callbacks.parameter, &parser->currentMessage);
 	    }
 	  	else if (parser->currentMessage.data)
