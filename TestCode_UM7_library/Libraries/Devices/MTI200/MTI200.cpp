@@ -208,14 +208,16 @@ void MTI200::mtMessageHandler(void * param, struct XbusMessage const* message)
 	if (!mti200) return;
 	if (message->mid >= DREG_HEALTH && message->mid <= DREG_GYRO_BIAS_Z ) { // Message queue disabled - parse data immediately
 		switch (message->mid) {
-		case 1: /* Parse first address */
+		case DREG_GYRO_PROC_X: /* Parse first address */
+			mti200->parseMTData2MessageUM7(message);
 			break;
-		case 2: /* Parse second address */
+		case DREG_QUAT_AB: /* Parse second address */
+			mti200->parseMTData2MessageUM7(message);
 			break;
-		case 3: /* Parse third address */
+		case DREG_VELOCITY_NORTH: /* Parse third address */
+			mti200->parseMTData2MessageUM7(message);
 			break;
 		}
-		mti200->parseMTData2Message(message);
 		mti200->parseMTData2Message(message); // Parse Data objects
 		deallocateMessageData(message->data);
 	} else { // other type of message, put into response queue
@@ -514,6 +516,9 @@ bool MTI200::setOutputRateUM7(uint8_t rate)
 	}
 	osDelay(10);
 	conf[0] = rate;
+	conf[1] = rate;
+	conf[2] = 0x0;
+	conf[3] = 0x0;
 	XbusMessage outputConfMsg2 = { CREG_COM_RATES5, elements, (void*) conf,
 				read_write, is_batch, batch_length };
 	XbusMessage const* outputConfRsp2 = doTransactionUM7(&outputConfMsg2);
@@ -753,6 +758,177 @@ void MTI200::parseMTData2Message(XbusMessage const* message)
 
 	xSemaphoreTake( _dataSemaphore, ( TickType_t ) portMAX_DELAY ); // take data semaphore to update data
 
+	if (XbusMessage_getDataItem(&tmp.PackageCounter, XDI_PacketCounter, message)) {
+		LastMeasurement.PackageCounter = tmp.PackageCounter;
+	}
+
+	uint32_t sampleTimeFine = 0;
+	if (XbusMessage_getDataItem(&sampleTimeFine, XDI_SampleTimeFine, message)) {
+		float time = (float)sampleTimeFine / 10000.0f;
+		if (sampleTimeFine > 0)
+			LastMeasurement.dt = time - LastMeasurement.Time;
+		LastMeasurement.Time = time;
+	}
+
+	/* Note that measurements and estimates has to be rotated 180 degrees due to the mount/orientation of the Xsens IMU */
+	if (XbusMessage_getDataItem(tmp.Quaternion, XDI_Quaternion, message)) {
+		memcpy(LastMeasurement.Quaternion, tmp.Quaternion, sizeof(tmp.Quaternion));
+		LastMeasurement.Quaternion[1] = -LastMeasurement.Quaternion[1];
+		LastMeasurement.Quaternion[2] = -LastMeasurement.Quaternion[2];
+	}
+
+	if (XbusMessage_getDataItem(tmp.DeltaQ, XDI_DeltaQ, message)) {
+		memcpy(LastMeasurement.DeltaQ, tmp.DeltaQ, sizeof(tmp.DeltaQ));
+		LastMeasurement.DeltaQ[1] = -LastMeasurement.DeltaQ[1];
+		LastMeasurement.DeltaQ[2] = -LastMeasurement.DeltaQ[2];
+	}
+
+	if (XbusMessage_getDataItem(tmp.Accelerometer, XDI_Acceleration, message)) {
+		memcpy(LastMeasurement.Accelerometer, tmp.Accelerometer, sizeof(tmp.Accelerometer));
+		LastMeasurement.Accelerometer[0] = -LastMeasurement.Accelerometer[0];
+		LastMeasurement.Accelerometer[1] = -LastMeasurement.Accelerometer[1];
+	}
+
+	if (XbusMessage_getDataItem(tmp.Gyroscope, XDI_RateOfTurn, message)) {
+		memcpy(LastMeasurement.Gyroscope, tmp.Gyroscope, sizeof(tmp.Gyroscope));
+		LastMeasurement.Gyroscope[0] = -LastMeasurement.Gyroscope[0];
+		LastMeasurement.Gyroscope[1] = -LastMeasurement.Gyroscope[1];
+	}
+
+	if (XbusMessage_getDataItem(tmp.Magnetometer, XDI_MagneticField, message)) {
+		memcpy(LastMeasurement.Magnetometer, tmp.Magnetometer, sizeof(tmp.Magnetometer));
+		LastMeasurement.Magnetometer[0] = -LastMeasurement.Magnetometer[0];
+		LastMeasurement.Magnetometer[1] = -LastMeasurement.Magnetometer[1];
+	}
+
+	if (XbusMessage_getDataItem(&tmp.Status, XDI_StatusWord, message)) {
+		LastMeasurement.Status = tmp.Status;
+	}
+
+	/* Successfully read all data - now overwrite LastMeasurement */
+	/*xSemaphoreTake( _dataSemaphore, ( TickType_t ) portMAX_DELAY ); // take data semaphore to update data
+	memcpy(&LastMeasurement, &tmp, sizeof(LastMeasurement_t));*/
+
+	xSemaphoreGive( _dataSemaphore ); // give semaphore back
+}
+
+void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
+{
+	LastMeasurement_t tmp;
+	union {
+		uint8_t byte_number[4];
+		float float_number;
+	} encodefloat;
+	if (!message)  return;
+
+	xSemaphoreTake( _dataSemaphore, ( TickType_t ) portMAX_DELAY ); // take data semaphore to update data
+
+	switch (message->mid) {
+	  case DREG_GYRO_PROC_X:
+	  	if(message->is_batch){
+	  		message->length;
+			/* Get pointer to data */
+	  	uint8_t const* dptr = (uint8_t const*) message->data;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = (uint8_t) *dptr++;
+			tmp.Gyroscope[0] = encodefloat.float_number;
+
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Gyroscope[1] = encodefloat.float_number;
+
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Gyroscope[2] = encodefloat.float_number;
+
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;;
+			/*
+			GRYO_PROC_TIME = encodefloat.float_number;
+			*/
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Accelerometer[0] = encodefloat.float_number;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Accelerometer[1] = encodefloat.float_number;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Accelerometer[2] = encodefloat.float_number;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Time = encodefloat.float_number;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Magnetometer[0] = encodefloat.float_number;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Magnetometer[1] = encodefloat.float_number;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;
+			tmp.Magnetometer[2] = encodefloat.float_number;
+
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = *dptr++;;
+			/*
+			MAG_PROC_TIME = encodefloat.float_number;
+      */
+			uint32_t sampleTimeFine = 0;
+
+			float time = tmp.Time;
+			if (sampleTimeFine > 0)
+				LastMeasurement.dt = time - LastMeasurement.Time;
+			LastMeasurement.Time = time;
+	  	}
+	  	break;
+	  case DREG_QUAT_AB:
+	  	if(message->is_batch){
+
+			message->length;
+			/* Get pointer to data */
+			uint8_t const* dptr = (uint8_t const*) message->data;
+			uint16_t QUAT_A = 0;
+			uint16_t QUAT_B = 0;
+			uint16_t QUAT_C = 0;
+			uint16_t QUAT_D = 0;
+			QUAT_A = (uint8_t) *dptr++ << 8;
+			QUAT_A |= (uint8_t) *dptr++;
+			QUAT_B = (uint8_t) *dptr++ << 8;
+			QUAT_B |= (uint8_t) *dptr++;
+			QUAT_C = (uint8_t) *dptr++ << 8;
+			QUAT_C |= (uint8_t) *dptr++;
+			QUAT_D = (uint8_t) *dptr++ << 8;
+			QUAT_D |= (uint8_t) *dptr++;
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3-i] = (uint8_t) *dptr++;
+	  	}
+	  	break;
+	  case DREG_EULER_PHI_THETA:
+		if (message->is_batch) {
+			uint8_t const* dptr = (uint8_t const*) message->data;
+			int16_t phi_roll, theta_pitch, psi_yaw, roll_rate, pitch_rate, yaw_rate;
+			phi_roll = (uint8_t) *dptr++ << 8;
+			phi_roll |= (uint8_t) *dptr++;
+			theta_pitch = (uint8_t) *dptr++ << 8;
+			theta_pitch |= (uint8_t) *dptr++;
+			psi_yaw = (uint8_t) *dptr++ << 8;
+			psi_yaw |= (uint8_t) *dptr++;
+
+			roll_rate = (uint8_t) *dptr++ << 8;
+			roll_rate |= (uint8_t) *dptr++;
+			pitch_rate = (uint8_t) *dptr++ << 8;
+			pitch_rate |= (uint8_t) *dptr++;
+			yaw_rate = (uint8_t) *dptr++ << 8;
+			yaw_rate |= (uint8_t) *dptr++;
+
+			for (int i = 0; i < 4; i++)
+				encodefloat.byte_number[3 - i] = (uint8_t) *dptr++;
+			// EULER_TIME = encodefloat.float_number;
+	  	}
+	  	break;
+	  default:
+	  	break;
+	}
 	if (XbusMessage_getDataItem(&tmp.PackageCounter, XDI_PacketCounter, message)) {
 		LastMeasurement.PackageCounter = tmp.PackageCounter;
 	}

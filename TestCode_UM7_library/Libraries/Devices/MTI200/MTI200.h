@@ -101,6 +101,7 @@ class MTI200 : public IMU
 		void printMessageData(XbusMessage const* message);
 
 		void parseMTData2Message(XbusMessage const* message);
+		void parseMTData2MessageUM7(XbusMessage const* message);
 
 };
 	

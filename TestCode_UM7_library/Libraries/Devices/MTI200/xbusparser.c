@@ -289,6 +289,9 @@ void XbusParser_parseByte(struct XbusParser* parser, const uint8_t byte)
       parser->packet_has_data = (parser->packet_type >> 7) & 0x01;
       parser->packet_is_batch = (parser->packet_type >> 6) & 0x01;
       parser->batch_length    = (parser->packet_type >> 2) & 0x0F;
+      parser->currentMessage.read_write = parser->packet_has_data;
+      parser->currentMessage.is_batch = parser->packet_is_batch;
+      parser->currentMessage.batch_length = parser->batch_length;
 		  if (parser->packet_has_data) {
 			  if (parser->packet_is_batch) {
 			  	parser->currentMessage.length = 4 * parser->batch_length;	// Each data packet is 4 bytes long
