@@ -214,11 +214,11 @@ void MTI200::mtMessageHandler(void * param, struct XbusMessage const* message)
 		case DREG_QUAT_AB: /* Parse second address */
 			mti200->parseMTData2MessageUM7(message);
 			break;
-		case DREG_VELOCITY_NORTH: /* Parse third address */
+		case DREG_EULER_PHI_THETA: /* Parse third address */
 			mti200->parseMTData2MessageUM7(message);
 			break;
 		}
-		mti200->parseMTData2Message(message); // Parse Data objects
+		// mti200->parseMTData2Message(message); // Parse Data objects
 		deallocateMessageData(message->data);
 	} else { // other type of message, put into response queue
 		XbusMessage * msgPtr = (XbusMessage *) pvPortMalloc(sizeof(XbusMessage));
@@ -822,6 +822,9 @@ void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
 	if (!message)  return;
 
 	xSemaphoreTake( _dataSemaphore, ( TickType_t ) portMAX_DELAY ); // take data semaphore to update data
+  bool copy_accmaggyro = false;
+  bool copy_quat = false;
+  bool copy_euler = false;
 
 	switch (message->mid) {
 	  case DREG_GYRO_PROC_X:
@@ -880,6 +883,7 @@ void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
 				LastMeasurement.dt = time - LastMeasurement.Time;
 			LastMeasurement.Time = time;
 	  	}
+	  	copy_accmaggyro = true;
 	  	break;
 	  case DREG_QUAT_AB:
 	  	if(message->is_batch){
@@ -887,22 +891,31 @@ void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
 			message->length;
 			/* Get pointer to data */
 			uint8_t const* dptr = (uint8_t const*) message->data;
-			uint16_t QUAT_A = 0;
-			uint16_t QUAT_B = 0;
-			uint16_t QUAT_C = 0;
-			uint16_t QUAT_D = 0;
-			QUAT_A = (uint8_t) *dptr++ << 8;
-			QUAT_A |= (uint8_t) *dptr++;
-			QUAT_B = (uint8_t) *dptr++ << 8;
-			QUAT_B |= (uint8_t) *dptr++;
-			QUAT_C = (uint8_t) *dptr++ << 8;
-			QUAT_C |= (uint8_t) *dptr++;
-			QUAT_D = (uint8_t) *dptr++ << 8;
-			QUAT_D |= (uint8_t) *dptr++;
-			for (int i = 0; i < 4; i++)
-				encodefloat.byte_number[3-i] = (uint8_t) *dptr++;
-	  	}
-	  	break;
+			int16_t QUAT_A = 0;
+			int16_t QUAT_B = 0;
+			int16_t QUAT_C = 0;
+			int16_t QUAT_D = 0;
+
+			QUAT_A =  (uint16_t)(*dptr++ << 8);
+			QUAT_A |=  *dptr++;
+			QUAT_B =  (*dptr++) << 8;
+			QUAT_B |=  *dptr++;
+			QUAT_C =  (*dptr++) << 8;
+			QUAT_C |=  *dptr++;
+			QUAT_D =  (*dptr++) << 8;
+			QUAT_D |=  *dptr++;
+			for (int i = 0; i < 4; i++) {
+				encodefloat.byte_number[3 - i] = (uint8_t) *dptr++;
+			}
+			tmp.Quaternion[0] = ((float) QUAT_A) / 29789.09091f;
+			tmp.Quaternion[1] = ((float) QUAT_B) / 29789.09091f;
+			tmp.Quaternion[2] = ((float) QUAT_C) / 29789.09091f;
+			tmp.Quaternion[3] = ((float) QUAT_D) / 29789.09091f;
+
+		}
+
+		copy_quat = true;
+		break;
 	  case DREG_EULER_PHI_THETA:
 		if (message->is_batch) {
 			uint8_t const* dptr = (uint8_t const*) message->data;
@@ -920,15 +933,17 @@ void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
 			pitch_rate |= (uint8_t) *dptr++;
 			yaw_rate = (uint8_t) *dptr++ << 8;
 			yaw_rate |= (uint8_t) *dptr++;
-
+      // TODO add delta q
 			for (int i = 0; i < 4; i++)
 				encodefloat.byte_number[3 - i] = (uint8_t) *dptr++;
 			// EULER_TIME = encodefloat.float_number;
 	  	}
+		copy_euler = true;
 	  	break;
 	  default:
 	  	break;
 	}
+	/*
 	if (XbusMessage_getDataItem(&tmp.PackageCounter, XDI_PacketCounter, message)) {
 		LastMeasurement.PackageCounter = tmp.PackageCounter;
 	}
@@ -940,8 +955,28 @@ void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
 			LastMeasurement.dt = time - LastMeasurement.Time;
 		LastMeasurement.Time = time;
 	}
-
+  */
+	if (copy_accmaggyro) {
+		memcpy(LastMeasurement.Accelerometer, tmp.Accelerometer,
+				sizeof(tmp.Accelerometer));
+		LastMeasurement.Accelerometer[0] = -LastMeasurement.Accelerometer[0];
+		LastMeasurement.Accelerometer[1] = -LastMeasurement.Accelerometer[1];
+		memcpy(LastMeasurement.Gyroscope, tmp.Gyroscope, sizeof(tmp.Gyroscope));
+		LastMeasurement.Gyroscope[0] = -LastMeasurement.Gyroscope[0];
+		LastMeasurement.Gyroscope[1] = -LastMeasurement.Gyroscope[1];
+		memcpy(LastMeasurement.Magnetometer, tmp.Magnetometer,
+				sizeof(tmp.Magnetometer));
+		LastMeasurement.Magnetometer[0] = -LastMeasurement.Magnetometer[0];
+		LastMeasurement.Magnetometer[1] = -LastMeasurement.Magnetometer[1];
+	}
+	if (copy_quat) {
+		memcpy(LastMeasurement.Quaternion, tmp.Quaternion, sizeof(tmp.Quaternion));
+		LastMeasurement.Quaternion[1] = -LastMeasurement.Quaternion[1];
+		LastMeasurement.Quaternion[2] = -LastMeasurement.Quaternion[2];
+	}
 	/* Note that measurements and estimates has to be rotated 180 degrees due to the mount/orientation of the Xsens IMU */
+	/*
+
 	if (XbusMessage_getDataItem(tmp.Quaternion, XDI_Quaternion, message)) {
 		memcpy(LastMeasurement.Quaternion, tmp.Quaternion, sizeof(tmp.Quaternion));
 		LastMeasurement.Quaternion[1] = -LastMeasurement.Quaternion[1];
@@ -975,6 +1010,7 @@ void MTI200::parseMTData2MessageUM7(XbusMessage const* message)
 	if (XbusMessage_getDataItem(&tmp.Status, XDI_StatusWord, message)) {
 		LastMeasurement.Status = tmp.Status;
 	}
+  */
 
 	/* Successfully read all data - now overwrite LastMeasurement */
 	/*xSemaphoreTake( _dataSemaphore, ( TickType_t ) portMAX_DELAY ); // take data semaphore to update data
