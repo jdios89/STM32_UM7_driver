@@ -1,4 +1,5 @@
-/* Copyright (C) 2018-2019 Thomas Jespersen, TKJ Electronics. All rights reserved.
+/* Copyright (C) 2019-2020 Juan de Dios Flores Mendez. All rights reserved.
+ * Based on code by Thomas Jespersen
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the MIT License
@@ -10,9 +11,8 @@
  *
  * Contact information
  * ------------------------------------------
- * Thomas Jespersen, TKJ Electronics
- * Web      :  http://www.tkjelectronics.dk
- * e-mail   :  thomasj@tkjelectronics.dk
+ * Juan de Dios Flores Mendez
+ * e-mail   :  juan.dios.flores@gmail.com
  * ------------------------------------------
  */
  
