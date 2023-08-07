@@ -7,6 +7,10 @@ The communication to the UM7 IMU is through Serial RS-232 UART. The uart librari
 The board used for developing this library is [Nucleo STM32H743ZI2](https://www.st.com/en/evaluation-tools/nucleo-h743zi.html#sample-buy) <br/>
 ![Screenshot](nucleo.jpg)
 
+## The main code developed is found under 
+
+[UM7 IMU Driver](https://redshiftlabs.com.au/product/um7-lt-orientation-sensor/)
+
 ## Installation 
 
 STMCubeMX IDE is used to specify the clock source for the periphirial in the input-output map. 
