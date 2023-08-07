@@ -2,7 +2,7 @@
 
 The communication to the UM7 IMU is through Serial RS-232 UART. The uart libraries used are on this git hub [Kugle embedded](https://github.com/mindThomas/Kugle-Embedded)
 
-## The main code developed is found under 
+## The main code contribution 
 
 [UM7 IMU Driver](https://github.com/jdios89/STM32_UM7_driver/tree/master/TestCode_UM7_library/Libraries/Devices/MTI200)
 
